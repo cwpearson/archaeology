@@ -38,4 +38,3 @@ func (index *IndexDB) CreateTable() error {
 	return err;
 }
 
-func
