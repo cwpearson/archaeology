@@ -5,7 +5,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"log"
-	ar "github.com/cwpearson/archaeology"
+	ar "github.com/cwpearson/archaeology/arch"
 )
 
 const (
