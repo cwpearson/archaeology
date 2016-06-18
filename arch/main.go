@@ -14,6 +14,8 @@ const (
 
 func main () {
 
+	log.SetFlags(log.Lshortfile)
+
 	// Get the configuration
 	cfg_path := os.Getenv(ARCH_CFG_ENV)
 	if cfg_path == "" {
@@ -33,6 +35,6 @@ func main () {
 	if err != nil {
 		log.Fatal(err)
 	}
-	index.CreateTable()
+	index.CreateTables()
 	defer index.Close()
 }

@@ -25,10 +25,10 @@ func (index *IndexDB) Close() error {
 	return index.Db.Close()
 }
 
-func (index *IndexDB) CreateTable() error {
+func (index *IndexDB) CreateTables() error {
 	sqlStmt := `
-	create table files (path TEXT primary key, hash TEXT);
-	delete from files;
+	create table hashes (VersionId INT primary key, Hash TEXT);
+	create table versions (Path TEXT primary key, VersionId INT);
 	`
 
 	_, err := index.Db.Exec(sqlStmt)
@@ -38,4 +38,3 @@ func (index *IndexDB) CreateTable() error {
 	return err;
 }
 
-func
