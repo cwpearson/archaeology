@@ -1,10 +1,11 @@
 package main
 
 import (
+	"log"
 	"os"
 	"os/user"
 	"path/filepath"
-	"log"
+
 	ar "github.com/cwpearson/archaeology/arch"
 )
 
@@ -12,7 +13,7 @@ const (
 	ARCH_CFG_ENV = "ARCHAEOLOGY_CFG"
 )
 
-func main () {
+func main() {
 
 	log.SetFlags(log.Lshortfile)
 
@@ -25,7 +26,7 @@ func main () {
 	}
 	cfg, err := ar.GetConfig(cfg_path)
 	if err != nil {
-		log.Fatalf("%v\n",err)
+		log.Fatalf("%v\n", err)
 	}
 	log.Printf("Using config: %#v\n", cfg)
 
@@ -37,4 +38,5 @@ func main () {
 	}
 	index.CreateTables()
 	defer index.Close()
+
 }
