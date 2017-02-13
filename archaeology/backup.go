@@ -35,8 +35,7 @@ func Backup(includes, ignores []string, dest string) {
 					return filepath.SkipDir
 				}
 			}
-		} else {
-			// Skip files
+		} else { // skip files
 			for _, ignore := range ignores {
 				matched, err := glob.Match(ignore, path)
 				if err != nil {
@@ -51,7 +50,6 @@ func Backup(includes, ignores []string, dest string) {
 			toBackup = append(toBackup, path)
 
 		}
-
 		return nil
 	}
 
