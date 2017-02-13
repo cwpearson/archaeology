@@ -8,13 +8,8 @@ import (
 	glob "github.com/mattn/go-zglob"
 )
 
-func Backup(includes, ignores []string, dest string) {
-	log.Info("includes: ", includes)
-	log.Info("ignores: ", ignores)
-	log.Info("destination: ", dest)
-
-	// Walk over all paths and assemble a list of files to back up
-	toBackup := []string{}
+func scan(includes, ignores []string) ([]string, error) {
+	matchedPaths := []string{}
 
 	addFile := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
@@ -28,7 +23,7 @@ func Backup(includes, ignores []string, dest string) {
 			for _, ignore := range ignores {
 				matched, err := glob.Match(ignore, dir)
 				if err != nil {
-					log.Fatal(err)
+					return err
 				}
 				if matched {
 					log.Info("Ignoring ", dir, " (rule ", ignore, ")")
@@ -39,7 +34,7 @@ func Backup(includes, ignores []string, dest string) {
 			for _, ignore := range ignores {
 				matched, err := glob.Match(ignore, path)
 				if err != nil {
-					log.Fatal(err)
+					return err
 				}
 				if matched {
 					log.Info("Ignoring ", path, " (rule ", ignore, ")")
@@ -47,7 +42,7 @@ func Backup(includes, ignores []string, dest string) {
 				}
 			}
 			log.Info("Adding ", path)
-			toBackup = append(toBackup, path)
+			matchedPaths = append(matchedPaths, path)
 
 		}
 		return nil
@@ -60,8 +55,22 @@ func Backup(includes, ignores []string, dest string) {
 		}
 	}
 
-	log.Info("Found ", len(toBackup), " files")
+	return matchedPaths, nil
+}
 
+func Backup(includes, ignores []string, dest string) error {
+	log.Info("includes: ", includes)
+	log.Info("ignores: ", ignores)
+	log.Info("destination: ", dest)
+
+	// Walk over all paths and assemble a list of files to back up
+	toBackup, err := scan(includes, ignores)
+	if err != nil {
+		return err
+	}
+
+	log.Info("Found ", len(toBackup), " files")
+	return nil
 }
 
 func backupPath(path string, ignores []string, dest string) {

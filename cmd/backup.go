@@ -37,6 +37,9 @@ var backupCmd = &cobra.Command{
 		// Get destination from config
 		dest := "~/.archaeology/backups"
 
-		archaeology.Backup(include, ignore, dest)
+		err := archaeology.Backup(include, ignore, dest)
+		if err != nil {
+			log.Fatal(err)
+		}
 	},
 }
