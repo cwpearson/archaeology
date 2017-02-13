@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 
 	log "github.com/Sirupsen/logrus"
+	glob "github.com/mattn/go-zglob"
 )
 
 func Backup(includes, ignores []string, dest string) {
@@ -17,22 +18,40 @@ func Backup(includes, ignores []string, dest string) {
 
 	addFile := func(path string, info os.FileInfo, err error) error {
 		if err != nil {
-			log.Print(err)
-			return nil
+			//log.Print(err)
+			return err
 		}
 
+		// Skip directories
 		if info.IsDir() {
 			dir := filepath.Base(path)
 			for _, ignore := range ignores {
-				if ignore == dir {
-					log.Info("Ignoring ", path, " (rule ", ignore, ")")
+				matched, err := glob.Match(ignore, dir)
+				if err != nil {
+					log.Fatal(err)
+				}
+				if matched {
+					log.Info("Ignoring ", dir, " (rule ", ignore, ")")
 					return filepath.SkipDir
 				}
 			}
+		} else {
+			// Skip files
+			for _, ignore := range ignores {
+				matched, err := glob.Match(ignore, path)
+				if err != nil {
+					log.Fatal(err)
+				}
+				if matched {
+					log.Info("Ignoring ", path, " (rule ", ignore, ")")
+					return nil
+				}
+			}
+			log.Info("Adding ", path)
+			toBackup = append(toBackup, path)
+
 		}
 
-		log.Info("Walking ", path)
-		toBackup = append(toBackup, path)
 		return nil
 	}
 
