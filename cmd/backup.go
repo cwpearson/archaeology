@@ -4,9 +4,18 @@ import (
 	log "github.com/Sirupsen/logrus"
 	"github.com/cwpearson/archaeology/archaeology"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
+var include []string
+var ignore []string
+
 func init() {
+	backupCmd.PersistentFlags().StringSliceVarP(&include, "include", "i", []string{}, "Paths to include")
+	backupCmd.PersistentFlags().StringSliceVarP(&ignore, "ignore", "x", []string{}, "Paths to ignore")
+	viper.BindPFlag("include", backupCmd.PersistentFlags().Lookup("include"))
+	viper.BindPFlag("ignore", backupCmd.PersistentFlags().Lookup("ignore"))
+
 	RootCmd.AddCommand(backupCmd)
 }
 
@@ -19,12 +28,15 @@ var backupCmd = &cobra.Command{
 			log.Fatal("Expected at least one directory or file")
 		}
 
-		includes := args
-		ignores := []string{}
+		ignore = viper.GetStringSlice("ignore")
+
+		for _, i := range args {
+			include = append(include, i)
+		}
 
 		// Get destination from config
 		dest := "~/.archaeology/backups"
 
-		archaeology.Backup(includes, ignores, dest)
+		archaeology.Backup(include, ignore, dest)
 	},
 }
