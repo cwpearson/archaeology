@@ -1,6 +1,6 @@
 # archaeology
 
-A no-frills file backup utility written in Go.
+A block-level file backup utility written in Go.
 
 ## Setup
 
@@ -19,5 +19,5 @@ An example is below.
 
 ## Wishlist
 
-* Track file changes
+* Command for block-level edit distance
 * Track block-level changes
