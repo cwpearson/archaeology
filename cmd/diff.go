@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"log"
 	"os"
 
@@ -40,16 +41,9 @@ var diffCmd = &cobra.Command{
 			log.Fatal(err)
 		}
 
-		_, err = bv1.GetBlock(0)
-		if err != nil {
-			log.Fatal(err)
-		}
-		_, err = bv2.GetBlock(0)
-		if err != nil {
-			log.Fatal(err)
-		}
+		script := levenshtein.EditScriptForStrings(bv1, bv2, levenshtein.DefaultLevenshtein)
 
-		levenshtein.EditScriptForStrings(bv1, bv2, levenshtein.DefaultLevenshtein)
+		fmt.Println(script)
 
 	},
 }

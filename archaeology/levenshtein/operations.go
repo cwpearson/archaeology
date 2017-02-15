@@ -19,16 +19,18 @@ type Match struct {
 }
 
 func (o Match) Apply(source, target *archaeology.BlockView, matrix [][]int, i, j int) (int, bool) {
-	src, err := source.Get(i - 1)
-	if err != nil {
-		panic(err)
-	}
-	tgt, err := target.Get(j - 1)
-	if err != nil {
-		panic(err)
-	}
-	if i > 0 && j > 0 && src.Equals(tgt) {
-		return matrix[i-1][j-1], true
+	if i > 0 && j > 0 {
+		src, err := source.Get(i - 1)
+		if err != nil {
+			panic(err)
+		}
+		tgt, err := target.Get(j - 1)
+		if err != nil {
+			panic(err)
+		}
+		if src.Equals(tgt) {
+			return matrix[i-1][j-1], true
+		}
 	}
 
 	return 0, false

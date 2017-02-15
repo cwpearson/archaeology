@@ -77,8 +77,9 @@ func EditScriptForStrings(source, target *archaeology.BlockView, ops []EditOpera
 		panic("files have too many blocks")
 	}
 
-	return backtrace(int(source.Length()), int(target.Length()),
-		Matrix(source, target, ops), ops)
+	mat := Matrix(source, target, ops)
+
+	return backtrace(int(source.Length()), int(target.Length()), mat, ops)
 }
 
 func EditScriptForMatrix(matrix [][]int, ops []EditOperation) EditScript {
