@@ -7,6 +7,10 @@ import (
 	log "github.com/Sirupsen/logrus"
 )
 
+const (
+	blockSize = 4096
+)
+
 var RootCmd = &cobra.Command{
 	Use:   "archaeology",
 	Short: "Short",

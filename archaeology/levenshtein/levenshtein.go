@@ -1,15 +1,7 @@
 package levenshtein
 
 import "math"
-
-type Comparable interface {
-	Equals(rhs Comparable) bool
-}
-
-type Levenshteinable interface {
-	Length() int
-	Get(i int) Comparable
-}
+import "github.com/cwpearson/archaeology/archaeology"
 
 func min(a, b int) int {
 	if a < b {
@@ -25,10 +17,17 @@ func max(a int, b int) int {
 	return a
 }
 
-func Matrix(src, tgt Levenshteinable, ops []EditOperation) [][]int {
+func Matrix(src, tgt *archaeology.BlockView, ops []EditOperation) [][]int {
 
-	rows := src.Length() + 1
-	cols := tgt.Length() + 1
+	if src.Length() > math.MaxInt32 {
+		panic("files have too many blocks")
+	}
+	if tgt.Length() > math.MaxInt32 {
+		panic("files have too many blocks")
+	}
+
+	rows := int(src.Length()) + 1
+	cols := int(tgt.Length()) + 1
 	mat := make([][]int, rows)
 
 	for r := 0; r < rows; r++ {
@@ -70,8 +69,15 @@ func backtrace(i int, j int, matrix [][]int, ops []EditOperation) EditScript {
 	return EditScript{}
 }
 
-func EditScriptForStrings(source, target Levenshteinable, ops []EditOperation) EditScript {
-	return backtrace(source.Length(), target.Length(),
+func EditScriptForStrings(source, target *archaeology.BlockView, ops []EditOperation) EditScript {
+	if source.Length() > math.MaxInt32 {
+		panic("files have too many blocks")
+	}
+	if target.Length() > math.MaxInt32 {
+		panic("files have too many blocks")
+	}
+
+	return backtrace(int(source.Length()), int(target.Length()),
 		Matrix(source, target, ops), ops)
 }
 
