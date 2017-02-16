@@ -1,12 +1,12 @@
 package cmd
 
 import (
-	"fmt"
-	"log"
+	"io"
 	"os"
+	"time"
 
-	"github.com/cwpearson/archaeology/archaeology"
-	"github.com/cwpearson/archaeology/archaeology/levenshtein"
+	log "github.com/Sirupsen/logrus"
+	"github.com/cwpearson/archaeology/archaeology/adler"
 	"github.com/spf13/cobra"
 )
 
@@ -27,23 +27,49 @@ var diffCmd = &cobra.Command{
 		if err != nil {
 			log.Fatal(err)
 		}
-		bv1, err := archaeology.NewBlockView(f1, blockSize)
-		if err != nil {
-			log.Fatal(err)
-		}
+		defer f1.Close()
 
 		f2, err := os.Open(args[1])
 		if err != nil {
 			log.Fatal(err)
 		}
-		bv2, err := archaeology.NewBlockView(f2, blockSize)
+		defer f2.Close()
+
+		fi, err := f1.Stat()
 		if err != nil {
 			log.Fatal(err)
 		}
+		f1Size := fi.Size()
 
-		script := levenshtein.EditScriptForStrings(bv1, bv2, levenshtein.DefaultLevenshtein)
+		start := time.Now()
+		rollingChecksums := []uint32{}
+		buf := make([]byte, blockSize)
 
-		fmt.Println(script)
+		for k := int64(0); k < f1Size; k += blockSize {
+
+			buf = buf[:cap(buf)] // resize buffer to its original capacity
+			_, err := f1.Seek(k, io.SeekStart)
+			if err != nil {
+				log.Fatal(err)
+			}
+
+			n, err := f1.Read(buf)
+			if err != nil && err != io.EOF {
+				log.Fatal(err)
+			}
+			buf = buf[:n]
+
+			if k < 0 {
+				log.Fatal("k should be non-negative")
+			}
+			s := adler.NewSum(buf, uint64(k))
+			rollingChecksums = append(rollingChecksums, s.Current())
+		}
+		elapsed := time.Since(start)
+		speed := float64(f1Size/(1024*1024)) / elapsed.Seconds()
+		log.Info("Block Checksums: ", elapsed, speed, " MB/s")
+
+		// fmt.Println(rollingChecksums)
 
 	},
 }
