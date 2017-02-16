@@ -2,7 +2,6 @@ package adler
 
 import (
 	"bytes"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -22,7 +21,7 @@ func TestRecurrence(t *testing.T) {
 			assert.Equal(t, a.Current(), b.Current(), "Expected hashes of \""+string(data1[s:e])+"\" to match")
 		}
 
-		fmt.Printf("%s %s %X %X %t\n", string(data1[s:e]), string(data2[s:e]), a.Current(), b.Current(), a.Current() == b.Current())
+		// fmt.Printf("%s %s %X %X %t\n", string(data1[s:e]), string(data2[s:e]), a.Current(), b.Current(), a.Current() == b.Current())
 
 		a.Roll(data1[e])
 		b.Roll(data2[e])
