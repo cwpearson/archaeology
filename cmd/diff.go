@@ -42,7 +42,7 @@ var diffCmd = &cobra.Command{
 		f1Size := fi.Size()
 
 		start := time.Now()
-		rollingChecksums := []uint32{}
+		checksums := []uint32{}
 		buf := make([]byte, blockSize)
 
 		for k := int64(0); k < f1Size; k += blockSize {
@@ -63,7 +63,7 @@ var diffCmd = &cobra.Command{
 				log.Fatal("k should be non-negative")
 			}
 			s := adler.NewSum(buf, uint64(k))
-			rollingChecksums = append(rollingChecksums, s.Current())
+			checksums = append(checksums, s.Current())
 		}
 		elapsed := time.Since(start)
 		speed := float64(f1Size/(1024*1024)) / elapsed.Seconds()

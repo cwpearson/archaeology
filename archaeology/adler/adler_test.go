@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestRecurrence(t *testing.T) {
+func TestSimilar(t *testing.T) {
 	data1 := []byte(`These are definitely some bytes`)
 	data2 := []byte(`These are similar         bytes`)
 
@@ -26,5 +26,19 @@ func TestRecurrence(t *testing.T) {
 		a.Roll(data1[e])
 		b.Roll(data2[e])
 	}
+
+}
+
+func TestRoll(t *testing.T) {
+	data := []byte(`These are definitely some bytes`)
+
+	windowSize := 3
+	a := NewSum(data[3:3+windowSize], 3)
+	b := NewSum(data[0:windowSize], 0)
+	b.Roll(data[3])
+	b.Roll(data[4])
+	b.Roll(data[5])
+
+	assert.Equal(t, a.Current(), b.Current(), "Expected hashes of \""+string(data[3:3+windowSize])+"\" to match")
 
 }
