@@ -90,36 +90,37 @@ var diffCmd = &cobra.Command{
 		}
 		buf = buf[:n]
 
-		var s *adler.Sum
+		s := adler.NewSum(buf, uint64(0))
 
 		for k := int64(0); k < f2Size; k++ {
-			if 0 == k {
-				s = adler.NewSum(buf, uint64(0))
-			} else {
-				f2.Seek(k, io.SeekStart)
-				oneByte := make([]byte, 1)
-				n, err := f2.Read(oneByte)
-				if err != nil && err != io.EOF {
-					log.Fatal(err)
-				}
-				oneByte = oneByte[:n]
-				if len(oneByte) == 1 {
-					s.Roll(oneByte[0])
-				} else {
-					log.Warn("Read zero bytes")
-					break
-				}
-				if err == io.EOF {
-					log.Warn("Read end of file2")
-					break
-				}
-			}
+			l := k + blockSize
+
 			checksum := s.Current()
 			offset, ok := firstOffsets[checksum]
-			if !ok {
-				fmt.Printf("New checksum at offset %d\n", k)
-			} else {
+			if ok {
 				fmt.Printf("file2 offset %d checksum matches file1 offset %d\n", k, offset)
+			} else {
+				// fmt.Printf("New checksum at offset %d\n", k)
+			}
+
+			f2.Seek(l, io.SeekStart)
+			oneByte := make([]byte, 1)
+			n, err := f2.Read(oneByte)
+			if err != nil && err != io.EOF {
+				log.Fatal(err)
+			}
+			oneByte = oneByte[:n]
+
+			if len(oneByte) == 1 {
+				s.Roll(oneByte[0])
+			} else {
+				log.Warn("Read zero bytes")
+				break
+			}
+			if err == io.EOF {
+				log.Warn("Read end of file2")
+				break
+
 			}
 
 		}
