@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"runtime/pprof"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -58,6 +59,21 @@ var diffCmd = &cobra.Command{
 	Short: "Compute block-level diff between files",
 	Long:  ``,
 	Run: func(cmd *cobra.Command, args []string) {
+
+		cpuprofile, err := RootCmd.PersistentFlags().GetString("cpuprofile")
+		if err != nil {
+			log.Fatal(err)
+		}
+		if cpuprofile != "" {
+			log.Infof("Doing CPU profiling, output=%s\n", cpuprofile)
+			f, err := os.Create(cpuprofile)
+			if err != nil {
+				log.Fatal(err)
+			}
+			pprof.StartCPUProfile(f)
+			defer pprof.StopCPUProfile()
+		}
+
 		if len(args) != 2 {
 			log.Fatal("Expected two files as arguments.")
 		}
@@ -146,7 +162,7 @@ var diffCmd = &cobra.Command{
 					if k > endPrevMatch {
 						fmt.Printf("New data in file2 at %d\n", k)
 					}
-					fmt.Printf("file2 block (%d-%d) matches file1 offsets %v\n", k, l, matches)
+					fmt.Printf("file2 block (%d-%d) matches file1 offsets %v\n", k, l, matches[0])
 					endPrevMatch = l
 				}
 

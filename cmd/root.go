@@ -24,6 +24,7 @@ var RootCmd = &cobra.Command{
 func init() {
 
 	RootCmd.PersistentFlags().Bool("viper", true, "Use Viper for configuration")
+	RootCmd.PersistentFlags().String("cpuprofile", "", "Enable CPU profiling")
 	viper.SetConfigName("config")             // name of config file (without extension)
 	viper.AddConfigPath("/etc/archaeology/")  // path to look for the config file in
 	viper.AddConfigPath("$HOME/.archaeology") // call multiple times to add many search paths
