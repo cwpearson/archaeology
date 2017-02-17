@@ -82,6 +82,7 @@ var diffCmd = &cobra.Command{
 		}
 		f2Size := fi.Size()
 
+		start = time.Now()
 		// Create an initial checksum of f2
 		buf = make([]byte, blockSize)
 		n, err := f2.Read(buf)
@@ -124,6 +125,9 @@ var diffCmd = &cobra.Command{
 			}
 
 		}
+		elapsed = time.Since(start)
+		speed = float64(f2Size/(1024*1024)) / elapsed.Seconds()
+		log.Info("File2 Rolling Checksums: ", elapsed, speed, " MB/s")
 
 	},
 }
