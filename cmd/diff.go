@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"io"
 	"os"
 	"time"
@@ -43,6 +44,7 @@ var diffCmd = &cobra.Command{
 
 		start := time.Now()
 		checksums := []uint32{}
+		firstOffsets := map[uint32]int64{}
 		buf := make([]byte, blockSize)
 
 		for k := int64(0); k < f1Size; k += blockSize {
@@ -59,17 +61,68 @@ var diffCmd = &cobra.Command{
 			}
 			buf = buf[:n]
 
-			if k < 0 {
-				log.Fatal("k should be non-negative")
-			}
 			s := adler.NewSum(buf, uint64(k))
-			checksums = append(checksums, s.Current())
+			checksum := s.Current()
+			checksums = append(checksums, checksum)
+			if _, ok := firstOffsets[checksum]; !ok {
+				firstOffsets[checksum] = k
+			}
+			if err == io.EOF {
+				log.Warn("Reached end of file1")
+				break
+			}
 		}
 		elapsed := time.Since(start)
 		speed := float64(f1Size/(1024*1024)) / elapsed.Seconds()
 		log.Info("Block Checksums: ", elapsed, speed, " MB/s")
 
-		// fmt.Println(rollingChecksums)
+		fi, err = f2.Stat()
+		if err != nil {
+			log.Fatal(err)
+		}
+		f2Size := fi.Size()
+
+		// Create an initial checksum of f2
+		buf = make([]byte, blockSize)
+		n, err := f2.Read(buf)
+		if err != nil {
+			log.Fatal(err)
+		}
+		buf = buf[:n]
+
+		var s *adler.Sum
+
+		for k := int64(0); k < f2Size; k++ {
+			if 0 == k {
+				s = adler.NewSum(buf, uint64(0))
+			} else {
+				f2.Seek(k, io.SeekStart)
+				oneByte := make([]byte, 1)
+				n, err := f2.Read(oneByte)
+				if err != nil && err != io.EOF {
+					log.Fatal(err)
+				}
+				oneByte = oneByte[:n]
+				if len(oneByte) == 1 {
+					s.Roll(oneByte[0])
+				} else {
+					log.Warn("Read zero bytes")
+					break
+				}
+				if err == io.EOF {
+					log.Warn("Read end of file2")
+					break
+				}
+			}
+			checksum := s.Current()
+			offset, ok := firstOffsets[checksum]
+			if !ok {
+				fmt.Printf("New checksum at offset %d\n", k)
+			} else {
+				fmt.Printf("file2 offset %d checksum matches file1 offset %d\n", k, offset)
+			}
+
+		}
 
 	},
 }
