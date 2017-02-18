@@ -9,6 +9,7 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
+	"github.com/cwpearson/archaeology/archaeology"
 	"github.com/cwpearson/archaeology/archaeology/adler"
 	"github.com/spf13/cobra"
 )
@@ -145,30 +146,41 @@ var diffCmd = &cobra.Command{
 
 		s := adler.NewSum(buf, uint64(0))
 
-		endPrevMatch := int64(-1)
+		file2Recipe := []*archaeology.Instruction{}
+
+		// blockRegionStart := int64(-1)
+		blockRegionEnd := int64(0)
+		// newRegionStart := int64(0)
+
 		for k := int64(0); k < f2Size; k++ {
 			l := k + blockSize
-
 			checksum := s.Current()
-			if offsets, ok := checksums[checksum]; ok {
+			if f1Offsets, ok := checksums[checksum]; ok {
 				// fmt.Printf("file2 block checksum (%d-%d) matches file1 block offsets %v\n", k, l, offsets)
 
 				// Actually compare the blocks
-				matches, err := compareBlocks(blockSize, f1, offsets, f2, k)
+				matches, err := compareBlocks(blockSize, f1, f1Offsets, f2, k)
 				if err != nil {
 					log.Fatal(err)
 				}
 				if len(matches) > 0 {
-					if k > endPrevMatch {
-						fmt.Printf("New data in file2 at %d\n", k)
+					if k == blockRegionEnd { // k is at the end of the previous block
+						fmt.Printf("Found a matching block at %d (matches %d)\n", k, matches[0])
+						// blockRegionStart = k
+						blockRegionEnd = l
+						file2Recipe = append(file2Recipe, archaeology.NewBlockRef(matches[0])) // Add the matching block
+					} else if k > blockRegionEnd { // k is past the end of a block Region (in a newRegion)
+						fmt.Printf("Found a match at %d to end a newRegion (started %d)\n", k, blockRegionEnd)
+						// blockRegionStart = k
+						blockRegionEnd = l
+						file2Recipe = append(file2Recipe, archaeology.NewNewData([]byte{})) // Add the new data
 					}
-					fmt.Printf("file2 block (%d-%d) matches file1 offsets %v\n", k, l, matches[0])
-					endPrevMatch = l
+				} else { // k-l doesn't match anything (there is new data in there)
+					// if k < blockRegionEnd && newRegionStart < blockRegionEnd {
+					// 	fmt.Printf("Found the beginning of a potential new region at %d\n", l)
+					// 	newRegionStart = l
+					// }
 				}
-
-				endPrevMatch = l
-			} else {
-
 			}
 
 			f2.Seek(l, io.SeekStart)
@@ -195,6 +207,15 @@ var diffCmd = &cobra.Command{
 		elapsed = time.Since(start)
 		speed = float64(f2Size/(1024*1024)) / elapsed.Seconds()
 		log.Info("File2 Rolling Checksums: ", elapsed, speed, " MB/s")
+
+		for _, inst := range file2Recipe {
+			if inst.Ty == archaeology.BlockRef {
+				fmt.Print("r")
+			} else if inst.Ty == archaeology.NewData {
+				fmt.Print("+")
+			}
+		}
+		fmt.Println()
 
 	},
 }
