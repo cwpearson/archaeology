@@ -28,7 +28,7 @@ func NewSum(buf []byte) *Sum {
 	return s
 }
 
-func (s *Sum) Roll(add byte) {
+func (s *Sum) Roll(add byte) uint32 {
 
 	sub := s.window[0] // leaving the window
 
@@ -42,6 +42,8 @@ func (s *Sum) Roll(add byte) {
 
 	// update the window
 	s.window = append(s.window[1:], add)
+
+	return s.Current()
 }
 
 func (s *Sum) Current() uint32 {

@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"bytes"
-	"fmt"
+	"crypto/sha1"
 	"io"
+	"math"
 	"os"
 	"runtime/pprof"
 	"time"
@@ -98,124 +99,181 @@ var diffCmd = &cobra.Command{
 		f1Size := fi.Size()
 
 		start := time.Now()
-		checksums := map[uint32][]int64{} // map of file1 block checksums to offsets in file1
+		f1BlockAdlerSums := map[uint32][]int64{} // map of file1 block checksums to offsets in file1
+		f1BlockShaSums := map[[sha1.Size]byte][]int64{}
 
 		buf := make([]byte, blockSize)
-
 		for k := int64(0); k < f1Size; k += blockSize {
 
-			buf = buf[:cap(buf)] // resize buffer to its original capacity
+			// resize buffer to its original capacity
+			buf = buf[:cap(buf)]
+
+			// Seek to file offset
 			_, err := f1.Seek(k, io.SeekStart)
 			if err != nil {
 				log.Fatal(err)
 			}
 
+			// Read from file
 			n, err := f1.Read(buf)
 			if err != nil && err != io.EOF {
 				log.Fatal(err)
 			}
 			buf = buf[:n]
 
-			s := adler.NewSum(buf, uint64(k))
-			checksum := s.Current()
-			checksums[checksum] = append(checksums[checksum], k)
+			// Create the adler and sha1 sums
+			s := adler.NewSum(buf)
+			adlerSum := s.Current()
+			if k == 0 {
+				log.Info(adlerSum)
+			}
+			f1BlockAdlerSums[adlerSum] = append(f1BlockAdlerSums[adlerSum], k)
+			shaSum := sha1.Sum(buf)
+			f1BlockShaSums[shaSum] = append(f1BlockShaSums[shaSum], k)
 
+			// Reached the end of the file
 			if err == io.EOF {
-				log.Warn("Reached end of file1")
 				break
 			}
 		}
 		elapsed := time.Since(start)
-		speed := float64(f1Size/(1024*1024)) / elapsed.Seconds()
+		speed := float64(f1Size) / (1024 * 1024) / elapsed.Seconds()
 		log.Info("Block Checksums: ", elapsed, speed, " MB/s")
+		log.Info(len(f1BlockAdlerSums), " unique adler sums")
+		log.Info(len(f1BlockShaSums), " unique sha1 sums")
+		if len(f1BlockShaSums) != int(math.Ceil(float64(f1Size)/blockSize)) {
+			log.Fatal("Sha1 collision in file1 blocks!")
+		}
 
+		start = time.Now()
+		// Get file 2 size
 		fi, err = f2.Stat()
 		if err != nil {
 			log.Fatal(err)
 		}
 		f2Size := fi.Size()
 
-		start = time.Now()
-		// Create an initial checksum of f2
-		buf = make([]byte, blockSize)
-		n, err := f2.Read(buf)
-		if err != nil {
-			log.Fatal(err)
-		}
-		buf = buf[:n]
-
-		s := adler.NewSum(buf, uint64(0))
-
 		file2Recipe := []*archaeology.Instruction{}
 
-		// blockRegionStart := int64(-1)
-		blockRegionEnd := int64(0)
-		// newRegionStart := int64(0)
+		oneByte := make([]byte, 1)
+		rollingStart := int64(-1)
+		var s *adler.Sum
+		for k := int64(0); k < f2Size; {
+			// fmt.Printf("k = %d\n", k)
 
-		for k := int64(0); k < f2Size; k++ {
-			l := k + blockSize
-			checksum := s.Current()
-			if f1Offsets, ok := checksums[checksum]; ok {
-				// fmt.Printf("file2 block checksum (%d-%d) matches file1 block offsets %v\n", k, l, offsets)
+			if rollingStart >= 0 { // one byte at a time
+				l := k + blockSize
+				if l >= f2Size {
+					break
+				}
+				// fmt.Printf("Rolling in byte %d...\n", l)
+				f2.Seek(l, io.SeekStart)
+				n, err := f2.Read(oneByte)
 
-				// Actually compare the blocks
-				matches, err := compareBlocks(blockSize, f1, f1Offsets, f2, k)
+				if err != nil && err != io.EOF {
+					log.Fatal(err)
+				}
+				if n == 0 {
+					log.Warn("Read zero bytes. Assuming nothing happened")
+					continue
+				}
+
+				// Should be guaranteed to read 1 byte by here
+				k++
+				oneByte = oneByte[:1]
+				adlerSum := s.Roll(oneByte[0])
+
+				// Check if any blocks match the current one - that means the new region has ended
+				if _, ok := f1BlockAdlerSums[adlerSum]; ok {
+					// fmt.Printf("file2 @ %d matches somewhere in file1 (weak)\n", k)
+
+					// Use the first matching block from file1
+					f2BlockShaSum := sha1.Sum(buf)
+					if f1BlockMatches, ok := f1BlockShaSums[f2BlockShaSum]; ok {
+						f1BlockRef := f1BlockMatches[0]
+						// fmt.Printf("file2 @ %d matches file1 @ %d (strong)\n", k, f1BlockRef)
+						file2Recipe = append(file2Recipe, archaeology.NewBlockRef(f1BlockRef))
+						k += blockSize
+						rollingStart = -1 // end of new region
+
+						continue
+					} else {
+						continue
+					}
+				}
+
+				if err == io.EOF {
+					// fmt.Println("Reached end of file2 while rolling")
+
+					// Read the new data region at the end of the file
+					newData := make([]byte, l-rollingStart)
+					_, err = f2.Seek(rollingStart, io.SeekStart)
+					if err != nil {
+						log.Fatal(err)
+					}
+					n, err := f2.Read(newData)
+					if err != nil {
+						log.Fatal(err)
+					}
+					newData = newData[:n]
+					file2Recipe = append(file2Recipe, archaeology.NewNewData(newData))
+					break
+				}
+
+			} else { // one block at a time
+				// Seek and read file
+				_, err = f2.Seek(k, io.SeekStart)
 				if err != nil {
 					log.Fatal(err)
 				}
-				if len(matches) > 0 {
-					if k == blockRegionEnd { // k is at the end of the previous block
-						fmt.Printf("Found a matching block at %d (matches %d)\n", k, matches[0])
-						// blockRegionStart = k
-						blockRegionEnd = l
-						file2Recipe = append(file2Recipe, archaeology.NewBlockRef(matches[0])) // Add the matching block
-					} else if k > blockRegionEnd { // k is past the end of a block Region (in a newRegion)
-						fmt.Printf("Found a match at %d to end a newRegion (started %d)\n", k, blockRegionEnd)
-						// blockRegionStart = k
-						blockRegionEnd = l
-						file2Recipe = append(file2Recipe, archaeology.NewNewData([]byte{})) // Add the new data
+				n, err := f2.Read(buf)
+				if err != nil {
+					log.Fatal(err)
+				}
+				buf = buf[:n]
+
+				s = adler.NewSum(buf)
+				adlerSum := s.Current()
+				if k == 0 {
+					log.Info(adlerSum)
+				}
+				if _, ok := f1BlockAdlerSums[adlerSum]; ok {
+					// fmt.Printf("file2 block checksum (%d-%d) matches file1 block offsets %v\n", k, l, offsets)
+
+					// Use the first matching block from file1
+					f2BlockShaSum := sha1.Sum(buf)
+					if f1BlockMatches, ok := f1BlockShaSums[f2BlockShaSum]; ok {
+						f1BlockRef := f1BlockMatches[0]
+						// fmt.Printf("file2[%d...] == file1[%d...]\n", k, f1BlockRef)
+						file2Recipe = append(file2Recipe, archaeology.NewBlockRef(f1BlockRef))
+						k += blockSize
+						continue
+					} else {
+						// fmt.Printf("file2[%d...] eventually had no match \n", k)
+						rollingStart = k
+						continue
 					}
-				} else { // k-l doesn't match anything (there is new data in there)
-					// if k < blockRegionEnd && newRegionStart < blockRegionEnd {
-					// 	fmt.Printf("Found the beginning of a potential new region at %d\n", l)
-					// 	newRegionStart = l
-					// }
+				} else {
+					// fmt.Printf("file2[%d...] had no weak match\n", k)
+					rollingStart = k
+					continue
 				}
 			}
 
-			f2.Seek(l, io.SeekStart)
-			oneByte := make([]byte, 1)
-			n, err := f2.Read(oneByte)
-			if err != nil && err != io.EOF {
-				log.Fatal(err)
-			}
-			oneByte = oneByte[:n]
-
-			if len(oneByte) == 1 {
-				s.Roll(oneByte[0])
-			} else {
-				log.Warn("Read zero bytes")
-				break
-			}
-			if err == io.EOF {
-				log.Warn("Read end of file2")
-				break
-
-			}
-
 		}
+
 		elapsed = time.Since(start)
 		speed = float64(f2Size/(1024*1024)) / elapsed.Seconds()
 		log.Info("File2 Rolling Checksums: ", elapsed, speed, " MB/s")
 
-		for _, inst := range file2Recipe {
-			if inst.Ty == archaeology.BlockRef {
-				fmt.Print("r")
-			} else if inst.Ty == archaeology.NewData {
-				fmt.Print("+")
-			}
-		}
-		fmt.Println()
+		// for _, inst := range file2Recipe {
+		// 	if inst.Ty == archaeology.BlockRef {
+		// 		fmt.Print("r")
+		// 	} else if inst.Ty == archaeology.NewData {
+		// 		fmt.Print("+")
+		// 	}
+		// }
+		// fmt.Println()
 
 	},
 }
