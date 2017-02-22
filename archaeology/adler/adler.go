@@ -9,7 +9,7 @@ type Sum struct {
 }
 
 // NewSum produces a Sum of the buffer buf assuming buf is a window starting at offset k
-func NewSum(buf []byte, k uint64) *Sum {
+func NewSum(buf []byte) *Sum {
 
 	if len(buf) == 0 {
 		return nil
@@ -18,7 +18,7 @@ func NewSum(buf []byte, k uint64) *Sum {
 	s := &Sum{}
 	s.window = buf
 	// Checksum of bytes k through l
-	s.k = k
+	s.k = 0
 	s.l = s.k + uint64(len(buf))
 
 	for i, data := range s.window {

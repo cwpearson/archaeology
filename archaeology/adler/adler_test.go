@@ -12,8 +12,8 @@ func TestSimilar(t *testing.T) {
 	data2 := []byte(`These are similar         bytes`)
 
 	windowSize := 3
-	a := NewSum(data1[0:windowSize], 0)
-	b := NewSum(data2[0:windowSize], 0)
+	a := NewSum(data1[0:windowSize])
+	b := NewSum(data2[0:windowSize])
 	for s := 0; s < len(data2)-windowSize; s++ {
 		e := s + windowSize
 
@@ -33,8 +33,8 @@ func TestRoll(t *testing.T) {
 	data := []byte(`These are definitely some bytes`)
 
 	windowSize := 3
-	a := NewSum(data[3:3+windowSize], 3)
-	b := NewSum(data[0:windowSize], 0)
+	a := NewSum(data[3 : 3+windowSize])
+	b := NewSum(data[0:windowSize])
 	b.Roll(data[3])
 	b.Roll(data[4])
 	b.Roll(data[5])
