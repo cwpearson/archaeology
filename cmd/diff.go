@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"crypto/sha1"
+	"fmt"
 	"io"
 	"math"
 	"os"
@@ -10,14 +11,19 @@ import (
 	"time"
 
 	log "github.com/Sirupsen/logrus"
-	"github.com/cwpearson/archaeology/archaeology"
+	arch "github.com/cwpearson/archaeology/archaeology"
 	"github.com/cwpearson/archaeology/archaeology/adler"
+	bv "github.com/cwpearson/archaeology/blockview"
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	RootCmd.AddCommand(diffCmd)
 }
+
+const (
+	blockSize = 4096
+)
 
 func compareBlocks(blockSize int, f1 *os.File, f1BlockOffsets []int64, f2 *os.File, f2BlockOffset int64) ([]int64, error) {
 	f2Buf := make([]byte, blockSize)
@@ -80,61 +86,41 @@ var diffCmd = &cobra.Command{
 			log.Fatal("Expected two files as arguments.")
 		}
 
-		f1, err := os.Open(args[0])
+		f1, err := bv.New(args[0])
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer f1.Close()
 
-		f2, err := os.Open(args[1])
+		f2, err := bv.New(args[1])
 		if err != nil {
 			log.Fatal(err)
 		}
 		defer f2.Close()
 
-		fi, err := f1.Stat()
+		f1Size, err := f1.Size()
 		if err != nil {
 			log.Fatal(err)
 		}
-		f1Size := fi.Size()
 
 		start := time.Now()
 		f1BlockAdlerSums := map[uint32][]int64{} // map of file1 block checksums to offsets in file1
 		f1BlockShaSums := map[[sha1.Size]byte][]int64{}
 
-		buf := make([]byte, blockSize)
-		for k := int64(0); k < f1Size; k += blockSize {
-
-			// resize buffer to its original capacity
-			buf = buf[:cap(buf)]
-
-			// Seek to file offset
-			_, err := f1.Seek(k, io.SeekStart)
-			if err != nil {
-				log.Fatal(err)
-			}
-
-			// Read from file
-			n, err := f1.Read(buf)
+		err = nil
+		for err == nil {
+			// Read blocks
+			k := f1.Offset()
+			buf, err := f1.NextBlock(blockSize)
 			if err != nil && err != io.EOF {
 				log.Fatal(err)
 			}
-			buf = buf[:n]
 
 			// Create the adler and sha1 sums
-			s := adler.NewSum(buf)
-			adlerSum := s.Current()
-			if k == 0 {
-				log.Info(adlerSum)
-			}
+			adlerSum := adler.Sum(buf)
 			f1BlockAdlerSums[adlerSum] = append(f1BlockAdlerSums[adlerSum], k)
 			shaSum := sha1.Sum(buf)
 			f1BlockShaSums[shaSum] = append(f1BlockShaSums[shaSum], k)
-
-			// Reached the end of the file
-			if err == io.EOF {
-				break
-			}
 		}
 		elapsed := time.Since(start)
 		speed := float64(f1Size) / (1024 * 1024) / elapsed.Seconds()
@@ -147,19 +133,18 @@ var diffCmd = &cobra.Command{
 
 		start = time.Now()
 		// Get file 2 size
-		fi, err = f2.Stat()
+		f2Size, err := f2.Size()
 		if err != nil {
 			log.Fatal(err)
 		}
-		f2Size := fi.Size()
 
-		file2Recipe := []*archaeology.Instruction{}
-
-		oneByte := make([]byte, 1)
+		file2Recipe := []*arch.Instruction{}
 		rollingStart := int64(-1)
-		var s *adler.Sum
-		for k := int64(0); k < f2Size; {
-			// fmt.Printf("k = %d\n", k)
+
+		err = nil
+		for err == nil {
+			k := f2.Offset()
+			fmt.Printf("k = %d\n", k)
 
 			if rollingStart >= 0 { // one byte at a time
 				l := k + blockSize
@@ -167,21 +152,17 @@ var diffCmd = &cobra.Command{
 					break
 				}
 				// fmt.Printf("Rolling in byte %d...\n", l)
-				f2.Seek(l, io.SeekStart)
-				n, err := f2.Read(oneByte)
-
-				if err != nil && err != io.EOF {
+				data, err := f2.NextByte()
+				if err == bv.ErrNoByte { // done!
+					log.Info("Reached end of file 2")
+					break
+				} else if err != nil && err != io.EOF {
 					log.Fatal(err)
 				}
-				if n == 0 {
-					log.Warn("Read zero bytes. Assuming nothing happened")
-					continue
-				}
-
+				k := f2.Offset()
 				// Should be guaranteed to read 1 byte by here
-				k++
-				oneByte = oneByte[:1]
-				adlerSum := s.Roll(oneByte[0])
+
+				adlerSum := s.Roll(data)
 
 				// Check if any blocks match the current one - that means the new region has ended
 				if _, ok := f1BlockAdlerSums[adlerSum]; ok {

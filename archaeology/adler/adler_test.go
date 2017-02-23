@@ -42,3 +42,18 @@ func TestRoll(t *testing.T) {
 	assert.Equal(t, a.Current(), b.Current(), "Expected hashes of \""+string(data[3:3+windowSize])+"\" to match")
 
 }
+
+func TestNew(t *testing.T) {
+	data := []byte(`These are definitely some bytes`)
+
+	aSum := Sum(data)
+	b := NewSum(data)
+
+	assert.Equal(t, aSum, b.Current(), "")
+
+	b = NewSum([]byte{})
+	for _, d := range data {
+		b.Roll(d)
+	}
+	assert.Equal(t, aSum, b.Current(), "")
+}

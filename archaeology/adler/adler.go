@@ -1,6 +1,6 @@
 package adler
 
-type Sum struct {
+type Adler struct {
 	a, b uint16
 
 	k, l uint64
@@ -9,13 +9,9 @@ type Sum struct {
 }
 
 // NewSum produces a Sum of the buffer buf assuming buf is a window starting at offset k
-func NewSum(buf []byte) *Sum {
+func NewSum(buf []byte) *Adler {
 
-	if len(buf) == 0 {
-		return nil
-	}
-
-	s := &Sum{}
+	s := &Adler{}
 	s.window = buf
 	// Checksum of bytes k through l
 	s.k = 0
@@ -28,7 +24,22 @@ func NewSum(buf []byte) *Sum {
 	return s
 }
 
-func (s *Sum) Roll(add byte) uint32 {
+func Sum(buf []byte) uint32 {
+
+	s := &Adler{}
+	s.window = buf
+	// Checksum of bytes k through l
+	s.k = 0
+	s.l = s.k + uint64(len(buf))
+
+	for i, data := range s.window {
+		s.a += uint16(data)
+		s.b += uint16((s.l - (uint64(i) + s.k)) * uint64(data))
+	}
+	return s.Current()
+}
+
+func (s *Adler) Roll(add byte) uint32 {
 
 	sub := s.window[0] // leaving the window
 
@@ -46,6 +57,6 @@ func (s *Sum) Roll(add byte) uint32 {
 	return s.Current()
 }
 
-func (s *Sum) Current() uint32 {
+func (s *Adler) Current() uint32 {
 	return uint32(s.a) + (uint32(s.b) << 16)
 }
